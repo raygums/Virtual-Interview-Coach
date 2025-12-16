@@ -1,7 +1,8 @@
 streamlit
 langchain
-langchain-openai
+langchain-groq
+langchain-huggingface
 langchain-community
 chromadb
 pypdf
-tiktoken    
+sentence-transformers
