@@ -1,17 +1,21 @@
 import streamlit as st
 import tempfile
 import os
+
+# --- UPDATE IMPORT UNTUK LANGCHAIN TERBARU ---
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_groq import ChatGroq  # GANTI: Pakai Groq (Gratis)
-from langchain_huggingface import HuggingFaceEmbeddings # GANTI: Pakai HF (Gratis)
+from langchain_groq import ChatGroq 
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain.prompts import ChatPromptTemplate
-from langchain.schema.runnable import RunnablePassthrough
-from langchain.schema import StrOutputParser
+
+# PERUBAHAN UTAMA ADA DI SINI (Pakai langchain_core):
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 
 # --- KONFIGURASI HALAMAN ---
-st.set_page_config(page_title="Virtual STAR Interview Coach (Free Version)", page_icon="🚀")
+st.set_page_config(page_title="Virtual STAR Interview Coach", page_icon="🚀")
 
 st.title("🚀 Virtual Interview Coach (Llama-3 Version)")
 st.caption("Powered by Groq (Fast Inference) & HuggingFace Embeddings")
@@ -19,7 +23,6 @@ st.caption("Powered by Groq (Fast Inference) & HuggingFace Embeddings")
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Pengaturan")
-    # Link untuk user mengambil API Key gratis
     st.markdown("[Dapatkan API Key Gratis di sini](https://console.groq.com/keys)")
     api_key = st.text_input("Masukkan Groq API Key (gsk_...)", type="password")
     
@@ -46,12 +49,16 @@ def process_document(uploaded_file):
     )
     splits = text_splitter.split_documents(docs)
 
-    # 3. Embedding (GRATIS via HuggingFace - Jalan di CPU Laptop)
-    # Model ini kecil & cepat (all-MiniLM-L6-v2)
+    # 3. Embedding (GRATIS via HuggingFace)
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     
     # 4. Simpan ke Vector DB
-    vectorstore = Chroma.from_documents(documents=splits, embedding=embeddings)
+    # Menambahkan persist_directory agar lebih stabil di Windows
+    vectorstore = Chroma.from_documents(
+        documents=splits, 
+        embedding=embeddings,
+        collection_name="star_method"
+    )
     
     os.remove(tmp_file_path)
     return vectorstore.as_retriever()
@@ -61,7 +68,7 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 if process_button and uploaded_file and api_key:
-    with st.spinner("Sedang memproses dokumen (Download model embedding mungkin butuh waktu di awal)..."):
+    with st.spinner("Sedang memproses dokumen (Download model embedding butuh waktu di awal)..."):
         try:
             st.session_state.retriever = process_document(uploaded_file)
             st.success("Dokumen siap! Silakan mulai simulasi.")
@@ -88,7 +95,7 @@ if user_input:
     st.chat_message("user").markdown(user_input)
     st.session_state.chat_history.append({"role": "user", "content": user_input})
 
-    # --- RAG CHAIN (Menggunakan Llama-3 via Groq) ---
+    # --- RAG CHAIN (Llama-3 via Groq) ---
     template = """
     Anda adalah Senior HR Recruiter. Gunakan panduan berikut untuk menilai jawaban kandidat.
     
@@ -101,16 +108,15 @@ if user_input:
     TUGAS:
     1. Cek apakah ada Situation, Task, Action, Result (STAR).
     2. Beri Nilai (0-100).
-    3. Beri kritik pedas tapi membangun jika Action/Result tidak spesifik.
+    3. Beri kritik jika Action/Result tidak spesifik.
     4. Beri contoh perbaikan.
     """
     
     prompt = ChatPromptTemplate.from_template(template)
     
-    # Menggunakan Model Llama3-8b atau 70b (Gratis di Groq)
     llm = ChatGroq(
         temperature=0.3, 
-        model_name="llama3-8b-8192", 
+        model_name="llama-3.3-70b-versatile", 
         groq_api_key=api_key
     )
 
@@ -131,4 +137,4 @@ if user_input:
                 st.markdown(response)
                 st.session_state.chat_history.append({"role": "assistant", "content": response})
             except Exception as e:
-                st.error(f"Error koneksi ke Groq: {e}")
+                st.error(f"Error: {e}")
